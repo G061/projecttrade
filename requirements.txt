@@ -13,6 +13,6 @@ streamlit
 Flask
 Flask-Cors
 websocket-client
-angel-one-smartapi
+smartapi-python
 python-telegram-bot
 pushbullet.py
