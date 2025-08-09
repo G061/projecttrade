@@ -13,14 +13,22 @@ st.title("📈 ProjectTrade Live Dashboard")
 
 # --- Current Positions ---
 st.header("Current Positions")
-positions_file = os.path.join("logs", "positions.json")
-if os.path.exists(positions_file):
-    with open(positions_file) as f:
+positions_state_file = os.path.join("logs", "positions_state.json")
+positions_history_file = os.path.join("logs", "positions.json")
+positions = []
+# Prefer current state JSON (array of open positions)
+if os.path.exists(positions_state_file):
+    try:
+        with open(positions_state_file) as f:
+            positions = json.load(f)
+    except Exception:
+        positions = []
+# Fallback to history JSONL if state is missing or empty
+if not positions and os.path.exists(positions_history_file):
+    with open(positions_history_file) as f:
         positions = [json.loads(line) for line in f if line.strip()]
-    if positions:
-        st.dataframe(pd.DataFrame(positions))
-    else:
-        st.info("No current positions.")
+if positions:
+    st.dataframe(pd.DataFrame(positions))
 else:
     st.info("No current positions.")
 
@@ -31,8 +39,14 @@ for file in glob.glob(os.path.join("logs", "backtest_*.csv")):
     df = pd.read_csv(file)
     if not df.empty:
         strat = file.split("backtest_")[1].replace(".csv", "")
-        pnl = df['price'].diff().sum() if 'price' in df else 0
-        leaderboard.append({"Strategy": strat, "PnL": pnl, "Trades": len(df)})
+        # Prefer PnL column if present, else simple price diff fallback
+        if 'pnl' in df.columns:
+            pnl_val = df['pnl'].sum()
+        elif 'price' in df.columns:
+            pnl_val = df['price'].diff().sum()
+        else:
+            pnl_val = 0
+        leaderboard.append({"Strategy": strat, "PnL": pnl_val, "Trades": len(df)})
 if leaderboard:
     st.dataframe(pd.DataFrame(leaderboard).sort_values("PnL", ascending=False))
 else:
@@ -50,6 +64,27 @@ if os.path.exists(signals_file):
         st.info("No signals yet.")
 else:
     st.info("No signals yet.")
+
+# --- Daily PnL (from trades.json) ---
+st.header("Daily PnL")
+trades_file = os.path.join("logs", "trades.json")
+if os.path.exists(trades_file):
+    with open(trades_file) as f:
+        trades = [json.loads(line) for line in f if line.strip()]
+    if trades:
+        trades_df = pd.DataFrame(trades)
+        if 'date' in trades_df.columns and 'pnl' in trades_df.columns:
+            daily = trades_df.groupby('date', dropna=False)['pnl'].sum().reset_index().sort_values('date')
+            daily['CumPnL'] = daily['pnl'].cumsum()
+            st.subheader("By Day")
+            st.dataframe(daily)
+            st.metric("Total PnL", f"{daily['pnl'].sum():.2f}")
+        else:
+            st.info("Trades found but missing 'date' or 'pnl' fields.")
+    else:
+        st.info("No trades yet.")
+else:
+    st.info("No trades yet.")
 
 # --- Control Panel ---
 st.header("Control Panel")

@@ -6,7 +6,9 @@ from core.broker import get_broker
 
 class LiveEngine:
     def __init__(self, broker_name="angelone", paper_mode=True, risk_config=None):
-        self.broker = get_broker(broker_name)
+        # Defer broker creation to authenticate() to allow paper mode without SmartAPI deps
+        self.broker_name = broker_name
+        self.broker = None
         self.paper_mode = paper_mode
         self.risk_config = risk_config or {
             'max_capital_per_trade': 0.1,  # 10% of capital
@@ -22,6 +24,16 @@ class LiveEngine:
         self.circuit_breaker = False
 
     def authenticate(self):
+        if self.paper_mode:
+            print("[AUTH] Paper mode enabled: skipping broker authentication.")
+            return True
+        # Create broker lazily in live mode
+        if self.broker is None:
+            try:
+                self.broker = get_broker(self.broker_name)
+            except Exception as e:
+                print(f"[AUTH] Failed to initialize broker '{self.broker_name}': {e}")
+                return False
         return self.broker.authenticate()
 
     def place_order(self, symbol, qty, side, order_type, price=None, sl=None, target=None, **kwargs):

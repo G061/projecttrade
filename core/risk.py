@@ -1,6 +1,9 @@
 """
 Risk Management Engine: stop loss, target, trailing stop, max capital/trade, max daily loss, circuit breaker
 """
+import os
+import json
+
 class RiskEngine:
     def __init__(self, config=None):
         self.config = config or {
@@ -30,3 +33,27 @@ class RiskEngine:
     def reset_daily(self):
         self.daily_loss = 0
         self.circuit_breaker = False
+
+    # --- Persistence helpers ---
+    def save_state(self, path=os.path.join('logs', 'risk_state.json')):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        state = {
+            'daily_loss': self.daily_loss,
+            'circuit_breaker': self.circuit_breaker,
+            'config': self.config,
+        }
+        with open(path, 'w') as f:
+            json.dump(state, f)
+
+    def load_state(self, path=os.path.join('logs', 'risk_state.json')):
+        if not os.path.exists(path):
+            return False
+        try:
+            with open(path) as f:
+                state = json.load(f)
+            self.daily_loss = state.get('daily_loss', 0)
+            self.circuit_breaker = state.get('circuit_breaker', False)
+            # keep current config if present; ignore persisted config differences
+            return True
+        except Exception:
+            return False

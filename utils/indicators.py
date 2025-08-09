@@ -13,5 +13,9 @@ def rsi(series, period=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    # Prevent divide-by-zero; add small epsilon to denominator
+    eps = 1e-10
+    denom = loss.where(loss > 0, eps)
+    rs = gain / denom
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(0)

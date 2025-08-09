@@ -12,7 +12,10 @@ def send_telegram_alert(message):
         return
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = {"chat_id": chat_id, "text": message}
-    requests.post(url, data=data)
+    try:
+        requests.post(url, data=data, timeout=8)
+    except Exception as e:
+        print(f"[ALERT] Telegram send failed: {e}")
 
 def send_pushbullet_alert(message):
     api_key = os.getenv('PUSHBULLET_API_KEY')
@@ -22,4 +25,7 @@ def send_pushbullet_alert(message):
     url = "https://api.pushbullet.com/v2/pushes"
     headers = {"Access-Token": api_key, "Content-Type": "application/json"}
     data = {"type": "note", "body": message}
-    requests.post(url, headers=headers, json=data)
+    try:
+        requests.post(url, headers=headers, json=data, timeout=8)
+    except Exception as e:
+        print(f"[ALERT] Pushbullet send failed: {e}")

@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 import os
 
 class Backtester:
-    def __init__(self, strategies, data_loader, initial_capital=100000):
+    def __init__(self, strategies, data_loader, initial_capital=100000, fee_per_trade=0.0, slippage_bps=0.0):
         self.strategies = strategies  # dict: name -> strategy instance
         self.data_loader = data_loader
         self.initial_capital = initial_capital
+        self.fee_per_trade = float(fee_per_trade)
+        self.slippage_bps = float(slippage_bps)  # basis points applied on trade price
         self.results = {}
 
     def run(self, symbols, start_date, end_date):
@@ -17,8 +19,8 @@ class Backtester:
             df = self.data_loader(symbol, start_date, end_date)
             for strat_name, strat in self.strategies.items():
                 signals = strat.generate_signals(df)
-                pnl, trades = self.simulate(df, signals)
-                self.results[(symbol, strat_name)] = {'pnl': pnl, 'trades': trades}
+                pnl_series, trades = self.simulate(df, signals)
+                self.results[(symbol, strat_name)] = {'pnl': pnl_series, 'trades': trades}
 
     def simulate(self, df, signals):
         capital = self.initial_capital
@@ -27,14 +29,21 @@ class Backtester:
         pnl_list = []
         for i, signal in enumerate(signals):
             price = df['close'].iloc[i]
+            # apply slippage on execution price
+            slip_mult = 1.0 + (self.slippage_bps / 10000.0)
             if signal == 'BUY' and position == 0:
+                exec_price = price * slip_mult
                 position = 1
-                entry_price = price
-                trades.append({'action': 'BUY', 'price': price, 'index': i})
+                entry_price = exec_price
+                capital -= self.fee_per_trade
+                trades.append({'action': 'BUY', 'price': exec_price, 'index': i, 'fee': self.fee_per_trade})
             elif signal == 'SELL' and position == 1:
-                capital += price - entry_price
+                exec_price = price / slip_mult
+                pnl = exec_price - entry_price
+                capital += pnl
+                capital -= self.fee_per_trade
                 position = 0
-                trades.append({'action': 'SELL', 'price': price, 'index': i})
+                trades.append({'action': 'SELL', 'price': exec_price, 'index': i, 'fee': self.fee_per_trade, 'pnl': pnl})
             pnl_list.append(capital)
         return pnl_list, trades
 
